@@ -42,15 +42,14 @@ public class Postgresql {
             doLast { new Postgresql(project).run(); } };
     }
 
-    public Postgresql(Project project) {
+    public Postgresql(def project) {
         this.project = project;
     }
 
-    Project project;
+    def project;
 
     public void run() {
         checkConfiguration();
-        Sql gsql = new Sql(connection);
         try {
             gsql.execute(dropSql);
             gsql.execute(createSql);
@@ -62,16 +61,15 @@ public class Postgresql {
     
     public void checkConfiguration() {
         List errors = [];
-        PostgresqlExtension ext = project[EXTENSION_NAME];
-        if(!ext.url) {
+        if(!extension.url) {
             errors += "You need to set the url property in the ${EXTENSION_NAME} task";
         }
 
-        if(!ext.source) {
+        if(!extension.source) {
             errors += "You need to set the source database using the source property in the ${EXTENSION_NAME} task";
         }
 
-        if(!ext.target) {
+        if(!extension.target) {
             errors += "You need to set the target database using the target property in the ${EXTENSION_NAME} task";
         }
     }
@@ -81,6 +79,7 @@ public class Postgresql {
     }
 
     @Lazy Connection connection = DriverManager.getConnection(extension.url, extension.connectionProperties);
+    @Lazy Sql gsql = new Sql(connection);
 
     public String getDropSql() {
         return "drop database if exists ${extension.target}".toString();
