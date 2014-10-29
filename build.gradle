@@ -15,7 +15,18 @@ dependencies {
     testCompile('org.spockframework:spock-core:0.7-groovy-2.0') {
         exclude(group: 'org.codehaus.groovy')
     }
+    
     testCompile('postgresql:postgresql:9.1-901.jdbc4')
+}
+
+test {
+    if(project.hasProperty('db.baseurl')) {
+        systemProperty 'db.baseurl', project.property('db.baseurl')
+    }
+
+    if(project.hasProperty('db.connectionProperties')) {
+        systemProperty 'db.connectionProperties', project.property('db.connectionProperties')
+    }
 }
 
 task wrapper(type: Wrapper) {

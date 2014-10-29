@@ -3,6 +3,7 @@ package com.github.dwclark.dbreset;
 import java.sql.*;
 import groovy.sql.*;
 import spock.lang.*;
+import org.gradle.api.InvalidUserDataException;
 
 public class PostgresqlTest extends Specification {
 
@@ -20,39 +21,87 @@ insert into testing (description) values ('three');""";
 
     def project;
     def plugin;
-    def connectionProperties = [ user: 'ciuser', password: 'ciuser' ] as Properties;
+
+    public static Properties connectionProperties() {
+        if(System.getProperty('db.connectionProperties')) {
+            return Eval.me(System.getProperty('db.connectionProperties')) as Properties;
+        }
+        else {
+            return new Properties();
+        }
+    }
+
+    public static String baseUrl() {
+        return System.getProperty('db.baseurl');
+    }
+
     def source = 'postgresqltest';
     def target = 'postgresqlcopy';
 
     def setup() {
-        println("In setup()");
-        def pgext = new PostgresqlExtension(url: 'jdbc:postgresql:template1', source: source,
-                                            target: target, connectionProperties: connectionProperties);
+        def pgext = new PostgresqlExtension(url: baseUrl() + 'template1', source: source,
+                                            target: target, connectionProperties: connectionProperties());
 
         project = [ (Postgresql.EXTENSION_NAME): pgext ];
         plugin = new Postgresql(project);
     }
 
+    @IgnoreIf({ !Postgresql.isDriverPresent() || !System.getProperty('db.baseurl'); })
     def 'Test Create And Copy'() {
         setup:
-        Sql gsqlInit = new Sql(DriverManager.getConnection('jdbc:postgresql:template1', connectionProperties));
+        Sql gsqlInit = new Sql(DriverManager.getConnection(baseUrl() + 'template1', connectionProperties()));
         gsqlInit.execute(dropDatabase);
         gsqlInit.execute(createDatabase);
         gsqlInit.close();
 
-        Sql gsqlMakeSchema = new Sql(DriverManager.getConnection('jdbc:postgresql:' + source, connectionProperties));
+        Sql gsqlMakeSchema = new Sql(DriverManager.getConnection(baseUrl() + source, connectionProperties()));
         gsqlMakeSchema.execute(createTable);
         gsqlMakeSchema.execute(insertData);
         gsqlMakeSchema.close();
 
         plugin.run();
 
-        Sql gsqlVerify = new Sql(DriverManager.getConnection('jdbc:postgresql:' + target, connectionProperties));
+        Sql gsqlVerify = new Sql(DriverManager.getConnection(baseUrl() + target, connectionProperties()));
         
         expect:
         gsqlVerify.firstRow('select count(*) as c from testing')['c'] == 3;
 
         cleanup:
         gsqlVerify.close();
+    }
+
+    def 'Test Configuration Information'() {
+        setup:
+        PostgresqlExtension ext = new PostgresqlExtension();
+        def project = [ (Postgresql.EXTENSION_NAME): ext ];
+        Postgresql p = new Postgresql(project);
+
+        when:
+        p.checkConfiguration();
+
+        then:
+        thrown(InvalidUserDataException);
+
+        when:
+        ext.url = 'url';
+        p.checkConfiguration();
+
+        then:
+        thrown(InvalidUserDataException);
+
+        when:
+        ext.source = 'source';
+        p.checkConfiguration();
+
+        then:
+        thrown(InvalidUserDataException);
+
+        when:
+        ext.target = 'target';
+        p.checkConfiguration();
+
+        then:
+        notThrown(InvalidUserDataException);
+
     }
 }

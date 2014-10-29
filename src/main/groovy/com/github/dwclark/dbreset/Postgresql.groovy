@@ -2,6 +2,7 @@ package com.github.dwclark.dbreset;
 
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.InvalidUserDataException;
 import java.sql.*;
 import groovy.sql.*;
 
@@ -71,6 +72,10 @@ public class Postgresql {
 
         if(!extension.target) {
             errors += "You need to set the target database using the target property in the ${EXTENSION_NAME} task";
+        }
+
+        if(errors) {
+            throw new InvalidUserDataException(errors.join('\n'));
         }
     }
 
