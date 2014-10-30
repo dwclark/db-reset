@@ -7,16 +7,16 @@ public class DbResetPlugin implements Plugin<Project> {
 
     public static final String GROUP_NAME = 'Database Reset';
 
-    public void addGlobalDependencies(Project project) {
-        project.apply(plugin: 'application');
-        project.apply(plugin: 'groovy');
-    }
-
     public void apply(Project project) {
-        addGlobalDependencies(project);
-        
-        if(Postgresql.configure(project)) {
-            return;
+        project.configurations {
+            dbReset
         }
+
+        project.dependencies {
+            dbReset(localGroovy())
+            dbReset(group: 'com.github.dwclark', name: 'db-reset', version: '1.0.0');
+        }
+
+        PostgresqlConfigureTask.addTask(project);
     }
 }

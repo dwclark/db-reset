@@ -42,7 +42,7 @@ insert into testing (description) values ('three');""";
         def pgext = new PostgresqlExtension(url: baseUrl() + 'template1', source: source,
                                             target: target, connectionProperties: connectionProperties());
 
-        project = [ (Postgresql.EXTENSION_NAME): pgext ];
+        project = [ (PostgresqlExtension.EXTENSION_NAME): pgext ];
         plugin = new Postgresql(project);
     }
 
@@ -73,7 +73,7 @@ insert into testing (description) values ('three');""";
     def 'Test Configuration Information'() {
         setup:
         PostgresqlExtension ext = new PostgresqlExtension();
-        def project = [ (Postgresql.EXTENSION_NAME): ext ];
+        def project = [ (PostgresqlExtension.EXTENSION_NAME): ext ];
         Postgresql p = new Postgresql(project);
 
         when:

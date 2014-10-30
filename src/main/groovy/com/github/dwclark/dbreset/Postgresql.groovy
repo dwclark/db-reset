@@ -1,56 +1,68 @@
 package com.github.dwclark.dbreset;
 
 import org.gradle.api.Project;
-import org.gradle.api.Task;
-import org.gradle.api.InvalidUserDataException;
 import java.sql.*;
 import groovy.sql.*;
+import org.gradle.api.tasks.JavaExec;
 
-public class PostgresqlExtension {
-    String url;
-    String source;
-    String target;
-    Properties connectionProperties = new Properties();
-}
-
-public class Postgresql {
-
+public class PostgresqlExtension extends MapStringExtension {
     public static final String DRIVER_NAME = 'org.postgresql.Driver';
     public static final String EXTENSION_NAME = 'postgresqlConfig';
     public static final String TASK_NAME = 'resetPostgres';
+    
+    String url;
+    String source;
+    String target;
+    Map connectionProperties = [:];
 
-    public static boolean isDriverPresent() {
+    public String toMapString() {
+        Map map = [:];
+        if(url) map.url = url;
+        if(source) map.source = source;
+        if(target) map.target = target;
+        if(connectionProperties) map.connectionProperties = connectionProperties;
+        return toMapString(map);
+    }
+}
+
+public class PostgresqlConfigureTask {
+
+    public static void addTask(Project project) {
+        project.extensions.create(PostgresqlExtension.EXTENSION_NAME, PostgresqlExtension)
+        project.task(PostgresqlExtension.TASK_NAME).with {
+            group = DbResetPlugin.GROUP_NAME;
+            description = ("Reset postgresql database. Specify url, source, and target in ${PostgresqlExtension.EXTENSION_NAME}. " +
+                           "All other connection properties can be set through connectionProperties in ${PostgresqlExtension.EXTENSION_NAME}.");
+            doLast {
+                project.javaexec {
+                    main = PostgresqlReset.name;
+                    classpath(project.configurations.dbReset);
+                    args project[PostgresqlExtension.EXTENSION_NAME].toMapString();
+                }
+            }
+        }
+    }
+}
+
+public class PostgresqlReset {
+
+    PostgresqlExtension extension;
+    List errors = [];
+
+    public PostgresqlReset(PostgresqlExtension extension) {
+        this.extension = extension;
+    }
+
+    public Driver getDriver() {
         try {
-            Class.forName(DRIVER_NAME);
-            return true;
+            return Class.forName(PostgresqlExtension.DRIVER_NAME).newInstance();
         }
         catch(ClassNotFoundException cnfe) {
-            return false;
-        }
-    }
-
-    public static Task configure(Project project) {
-        if(!isDriverPresent()) {
             return null;
         }
-
-        project.extensions.create(EXTENSION_NAME, PostgresqlExtension)
-        Task task = project.task(TASK_NAME);
-        task.with {
-            group = DbResetPlugin.GROUP;
-            description = ("Reset postgresql database. Specify url, source, and target in ${EXTENSION_NAME}. " +
-                           "All other connection properties can be set through connectionProperties in ${EXTENSION_NAME}.");
-            doLast { new Postgresql(project).run(); } };
     }
 
-    public Postgresql(def project) {
-        this.project = project;
-    }
-
-    def project;
-
-    public void run() {
-        checkConfiguration();
+    public void reset() {
         try {
             gsql.execute(dropSql);
             gsql.execute(createSql);
@@ -61,29 +73,24 @@ public class Postgresql {
     }
     
     public void checkConfiguration() {
-        List errors = [];
+        if(!driver) {
+            errors += "You need to add the postgresql driver to the dbReset dependency set";
+        }
+
         if(!extension.url) {
-            errors += "You need to set the url property in the ${EXTENSION_NAME} task";
+            errors += "You need to set the url property in the ${PostgresqlExtension.EXTENSION_NAME} task";
         }
 
         if(!extension.source) {
-            errors += "You need to set the source database using the source property in the ${EXTENSION_NAME} task";
+            errors += "You need to set the source database using the source property in the ${PostgresqlExtension.EXTENSION_NAME} task";
         }
 
         if(!extension.target) {
-            errors += "You need to set the target database using the target property in the ${EXTENSION_NAME} task";
-        }
-
-        if(errors) {
-            throw new InvalidUserDataException(errors.join('\n'));
+            errors += "You need to set the target database using the target property in the ${PostgresqlExtension.EXTENSION_NAME} task";
         }
     }
 
-    public PostgresqlExtension getExtension() {
-        return project[EXTENSION_NAME];
-    }
-
-    @Lazy Connection connection = DriverManager.getConnection(extension.url, extension.connectionProperties);
+    @Lazy Connection connection = driver.connect(extension.url, extension.connectionProperties as Properties);
     @Lazy Sql gsql = new Sql(connection);
 
     public String getDropSql() {
@@ -92,5 +99,25 @@ public class Postgresql {
 
     public String getCreateSql() {
         return "create database ${extension.target} template ${extension.source}".toString();
+    }
+
+    public static void main(String[] args) {
+        try {
+            PostgresqlExtension ext = new PostgresqlExtension();
+            ext.fromMapString(args[0]);
+            PostgresqlReset p = new PostgresqlReset(ext);
+            p.checkConfiguration();
+            if(p.errors) {
+                p.errors.each { String error -> System.err.println(error); };
+                System.exit(-1);
+            }
+            else {
+                p.reset();
+            }
+        }
+        catch(Throwable t) {
+            t.printStackTrace();
+            throw t;
+        }
     }
 }
