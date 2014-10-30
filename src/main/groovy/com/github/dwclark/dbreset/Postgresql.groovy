@@ -37,10 +37,7 @@ public class PostgresqlConfigureTask {
                 project.javaexec {
                     main = PostgresqlReset.name;
                     classpath(project.configurations.dbReset);
-                    args project[PostgresqlExtension.EXTENSION_NAME].toMapString();
-                }
-            }
-        }
+                    args project[PostgresqlExtension.EXTENSION_NAME].toMapString(); }; }; };
     }
 }
 
