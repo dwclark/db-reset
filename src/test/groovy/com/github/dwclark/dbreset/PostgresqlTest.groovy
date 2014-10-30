@@ -19,15 +19,15 @@ description varchar(100) not null
 insert into testing (description) values ('two');
 insert into testing (description) values ('three');""";
 
-    def project;
-    def plugin;
+    def postgresqlReset;
 
-    public static Properties connectionProperties() {
+    public static Map connectionProperties() {
+        println("Connection Properties: " + System.getProperty('db.connectionProperties'));
         if(System.getProperty('db.connectionProperties')) {
-            return Eval.me(System.getProperty('db.connectionProperties')) as Properties;
+            return Eval.me(System.getProperty('db.connectionProperties'));
         }
         else {
-            return new Properties();
+            return [:];
         }
     }
 
@@ -42,26 +42,29 @@ insert into testing (description) values ('three');""";
         def pgext = new PostgresqlExtension(url: baseUrl() + 'template1', source: source,
                                             target: target, connectionProperties: connectionProperties());
 
-        project = [ (PostgresqlExtension.EXTENSION_NAME): pgext ];
-        plugin = new Postgresql(project);
+        postgresqlReset = new PostgresqlReset(pgext);
     }
 
-    @IgnoreIf({ !Postgresql.isDriverPresent() || !System.getProperty('db.baseurl'); })
+    @IgnoreIf({ PostgresqlReset.loadDriverClass() == null || !System.getProperty('db.baseurl'); })
     def 'Test Create And Copy'() {
         setup:
-        Sql gsqlInit = new Sql(DriverManager.getConnection(baseUrl() + 'template1', connectionProperties()));
+        println("Trying to connect to template1");
+        Sql gsqlInit = new Sql(DriverManager.getConnection(baseUrl() + 'template1', connectionProperties() as Properties));
+        println("Connected");
         gsqlInit.execute(dropDatabase);
+        println("Dropped Database");
         gsqlInit.execute(createDatabase);
+        println("Created Database");
         gsqlInit.close();
 
-        Sql gsqlMakeSchema = new Sql(DriverManager.getConnection(baseUrl() + source, connectionProperties()));
+        Sql gsqlMakeSchema = new Sql(DriverManager.getConnection(baseUrl() + source, connectionProperties() as Properties));
         gsqlMakeSchema.execute(createTable);
         gsqlMakeSchema.execute(insertData);
         gsqlMakeSchema.close();
 
-        plugin.run();
+        postgresqlReset.reset();
 
-        Sql gsqlVerify = new Sql(DriverManager.getConnection(baseUrl() + target, connectionProperties()));
+        Sql gsqlVerify = new Sql(DriverManager.getConnection(baseUrl() + target, connectionProperties() as Properties));
         
         expect:
         gsqlVerify.firstRow('select count(*) as c from testing')['c'] == 3;
@@ -73,35 +76,34 @@ insert into testing (description) values ('three');""";
     def 'Test Configuration Information'() {
         setup:
         PostgresqlExtension ext = new PostgresqlExtension();
-        def project = [ (PostgresqlExtension.EXTENSION_NAME): ext ];
-        Postgresql p = new Postgresql(project);
+        PostgresqlReset p = new PostgresqlReset(ext);
 
         when:
         p.checkConfiguration();
 
         then:
-        thrown(InvalidUserDataException);
+        p.errors;
 
         when:
         ext.url = 'url';
         p.checkConfiguration();
 
         then:
-        thrown(InvalidUserDataException);
+        p.errors;
 
         when:
         ext.source = 'source';
         p.checkConfiguration();
 
         then:
-        thrown(InvalidUserDataException);
+        p.errors;
 
         when:
         ext.target = 'target';
         p.checkConfiguration();
 
         then:
-        notThrown(InvalidUserDataException);
+        !p.errors;
 
     }
 }

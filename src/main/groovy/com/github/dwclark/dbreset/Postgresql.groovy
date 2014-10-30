@@ -7,8 +7,8 @@ import org.gradle.api.tasks.JavaExec;
 
 public class PostgresqlExtension extends MapStringExtension {
     public static final String DRIVER_NAME = 'org.postgresql.Driver';
-    public static final String EXTENSION_NAME = 'postgresqlConfig';
-    public static final String TASK_NAME = 'resetPostgres';
+    public static final String EXTENSION_NAME = 'resetPostgresqlConfig';
+    public static final String TASK_NAME = 'resetPostgresql';
     
     String url;
     String source;
@@ -47,17 +47,27 @@ public class PostgresqlConfigureTask {
 public class PostgresqlReset {
 
     PostgresqlExtension extension;
-    List errors = [];
+    List errors;
 
     public PostgresqlReset(PostgresqlExtension extension) {
         this.extension = extension;
     }
 
-    public Driver getDriver() {
+    public static Class loadDriverClass() {
         try {
-            return Class.forName(PostgresqlExtension.DRIVER_NAME).newInstance();
+            return Class.forName(PostgresqlExtension.DRIVER_NAME);
         }
         catch(ClassNotFoundException cnfe) {
+            return null;
+        }
+    }
+
+    public Driver getDriver() {
+        Class c = loadDriverClass();
+        if(c) {
+            return c.newInstance();
+        }
+        else {
             return null;
         }
     }
@@ -73,6 +83,7 @@ public class PostgresqlReset {
     }
     
     public void checkConfiguration() {
+        errors = [];
         if(!driver) {
             errors += "You need to add the postgresql driver to the dbReset dependency set";
         }
